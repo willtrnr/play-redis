@@ -1,0 +1,14 @@
+*.sublime-*
+*~
+.*.swp
+.attach_*
+.bloop/
+.ensime*
+.env
+.idea
+.metals/
+.sbtopts
+.scannerwork/
+.~*
+project/project/
+target/
