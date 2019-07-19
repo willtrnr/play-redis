@@ -3,6 +3,8 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 
   name := "play-redis",
 
+  licenses := Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
+
   scalaVersion := "2.11.11",
   crossScalaVersions := Seq("2.11.11"),
 
@@ -18,7 +20,9 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(
+    libraryDependencies := Seq.empty,
     publishArtifact := false,
+    skip in publish := true,
     publish := {},
   )
   .aggregate(play24, play25, play26, play27)

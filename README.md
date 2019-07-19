@@ -20,9 +20,10 @@ Use the version matching your Play's major and minor release. Currently Play
 2.4.x and 2.5.x are supported, the implementation for version 2.6.x and 2.7.x
 are incomplete at the moment.
 
-Then add to your configuration:
+Then enable the module in your configuration, while disabling Ehcache:
 
 ```
+play.modules.disabled += "play.api.cache.EhCacheModule"
 play.modules.enabled += "net.archwill.play.redis.RedisModule"
 ```
 

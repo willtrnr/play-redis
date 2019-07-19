@@ -2,12 +2,14 @@ package net.archwill.play.redis
 
 import scala.concurrent.duration.Duration
 import scala.reflect.ClassTag
+import scala.util.control.NonFatal
 
 import java.util.Base64
 import javax.inject.{Inject, Singleton}
 
 import akka.actor.ActorSystem
 import akka.serialization.{Serialization, SerializationExtension}
+import play.api.Logger
 import play.api.cache.SyncCacheApi
 import redis.clients.jedis.{Jedis, JedisPool}
 import resource._
@@ -17,12 +19,20 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
 
   import scala.reflect.{ClassTag => Scala}, net.archwill.play.redis.{JavaClassTag => Java}
 
-  private[this] val client: ManagedResource[Jedis] = managed(pool.getResource)
+  private[this] val logger: Logger = Logger(classOf[RedisCacheApi])
 
   private[this] val serder: Serialization = SerializationExtension(system)
 
+  private[this] val client: ManagedResource[Jedis] = managed(pool.getResource)
+
   override def get[T: ClassTag](key: String): Option[T] =
-    Option(client.acquireAndGet(_.get(key))).map(decode(_).asInstanceOf[T])
+    try {
+      Option(client.acquireAndGet(_.get(key))).map(decode(_).asInstanceOf[T])
+    } catch {
+      case NonFatal(e) =>
+        logger.warn(s"Could not get key [$key] from cache", e)
+        None
+    }
 
   override def getOrElseUpdate[A: ClassTag](key: String, expiration: Duration)(orElse: => A): A =
     get[A](key) getOrElse {
@@ -31,21 +41,25 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
       v
     }
 
-  override def set(key: String, value: Any, expiration: Duration): Unit = {
-    if (value == null) {
-      remove(key)
-    } else {
-      val encoded = encode(value)
-      client acquireAndGet { c =>
-        if (expiration.isFinite) {
-          c.setex(key, expiration.toSeconds.toInt, encoded)
-        } else {
-          c.set(key, encoded)
+  override def set(key: String, value: Any, expiration: Duration): Unit =
+    try {
+      if (value == null) {
+        remove(key)
+      } else {
+        val encoded = encode(value)
+        client acquireAndGet { c =>
+          if (expiration.isFinite) {
+            c.setex(key, expiration.toSeconds.toInt, encoded)
+          } else {
+            c.set(key, encoded)
+          }
+          ()
         }
-        ()
       }
+    } catch {
+      case NonFatal(e) =>
+        logger.warn(s"Could not set key [$key] in cache", e)
     }
-  }
 
   override def remove(key: String): Unit =
     client acquireAndGet { c =>
@@ -61,7 +75,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
 
   private[this] def encode(value: Any): String = value match {
     case null =>
-      throw new UnsupportedOperationException("Null is not supported by the redis cache implementation")
+      throw new IllegalArgumentException("Cannot serialize null")
     case str: String =>
       str
     case prim if prim.getClass.isPrimitive || Primitives.primitives.contains(prim.getClass) =>
@@ -70,7 +84,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
       val data = serder.findSerializerFor(obj).toBinary(obj)
       Base64.getEncoder().encodeToString(data)
     case _ =>
-      throw new UnsupportedOperationException("Cannot serialize type " + value.getClass)
+      throw new IllegalArgumentException("Cannot serialize value of type " + value.getClass)
   }
 
   private[this] def decode[T](value: String)(implicit tag: ClassTag[T]): Any = tag match {
@@ -93,7 +107,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
     case Java.Double | Scala.Double =>
       value.toDouble
     case Scala.Nothing =>
-      throw new IllegalArgumentException("Cannot get an instance of Nothing from cache")
+      throw new IllegalArgumentException("Cannot decode an instance of Nothing from cache")
     case _ =>
       val data = Base64.getDecoder.decode(value)
       serder.deserialize(data, tag.runtimeClass.asInstanceOf[Class[_ <: AnyRef]]).get
