@@ -1,3 +1,6 @@
+val scala211 = "2.11.11"
+val scala212 = "2.12.8"
+
 val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "net.archwill.play",
 
@@ -5,8 +8,8 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 
   licenses := Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
 
-  scalaVersion := "2.11.11",
-  crossScalaVersions := Seq("2.11.11"),
+  scalaVersion := scala211,
+  crossScalaVersions := Seq(scala211),
 
   libraryDependencies ++= Seq(
     "javax.inject" % "javax.inject" % "1",
@@ -20,6 +23,8 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(
+    crossScalaVersions += scala212,
+
     libraryDependencies := Seq.empty,
     publishArtifact := false,
     skip in publish := true,
@@ -74,7 +79,7 @@ lazy val play26 = (project in file("./play-redis"))
   .settings(
     version := addVerSuffix(version.value, "play26"),
 
-    crossScalaVersions += "2.12.8",
+    crossScalaVersions += scala212,
 
     libraryDependencies ++= Seq(
       "com.typesafe" % "config" % "1.3.1",
@@ -97,7 +102,7 @@ lazy val play27 = (project in file("./play-redis"))
   .settings(
     version := addVerSuffix(version.value, "play27"),
 
-    crossScalaVersions += "2.12.8",
+    crossScalaVersions += scala212,
 
     libraryDependencies ++= Seq(
       "com.typesafe" % "config" % "1.3.3",
