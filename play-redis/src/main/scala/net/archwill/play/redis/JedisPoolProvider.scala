@@ -4,6 +4,7 @@ import javax.inject.{Inject, Provider, Singleton}
 
 import play.api.Logger
 import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import resource._
 
 @Singleton
 private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends Provider[JedisPool] {
@@ -12,7 +13,7 @@ private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends P
 
   override lazy val get: JedisPool = {
     logger.info(s"Connecting to redis at ${config.host}:${config.port}?database=${config.database}")
-    new JedisPool(
+    val pool = new JedisPool(
       new JedisPoolConfig,
       config.host,
       config.port,
@@ -20,6 +21,9 @@ private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends P
       config.password.orNull,
       config.database
     )
+    // Make sure our pool can handle requests before signing off on it
+    managed(pool.getResource).acquireAndGet(_.ping())
+    pool
   }
 
 }
