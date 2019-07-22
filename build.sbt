@@ -23,8 +23,6 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(
-    crossScalaVersions += scala212,
-
     libraryDependencies := Seq.empty,
     publishArtifact := false,
     skip in publish := true,
