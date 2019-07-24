@@ -1,3 +1,5 @@
+import ReleaseTransformations._
+
 val scala211 = "2.11.11"
 val scala212 = "2.12.8"
 
@@ -18,7 +20,21 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
     "redis.clients" % "jedis" % "3.1.0"
   ),
 
-  releaseCrossBuild := true,
+  releaseCrossBuild := false,
+
+  releaseProcess := Seq(
+    checkSnapshotDependencies,
+    inquireVersions,
+    runClean,
+    releaseStepCommandAndRemaining("+test"),
+    setReleaseVersion,
+    commitReleaseVersion,
+    tagRelease,
+    releaseStepCommandAndRemaining("+publish"),
+    setNextVersion,
+    commitNextVersion,
+    pushChanges,
+  ),
 )
 
 lazy val root = (project in file("."))
