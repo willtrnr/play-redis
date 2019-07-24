@@ -1,5 +1,7 @@
 package net.archwill.play.redis
 
+import scala.util.control.NonFatal
+
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.{Inject, Singleton}
@@ -8,7 +10,6 @@ import com.google.common.cache.{Cache, CacheBuilder}
 import play.api.Logger
 import redis.clients.jedis.{Jedis, JedisPubSub}
 import resource._
-import scala.util.control.NonFatal
 
 @Singleton
 private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
@@ -55,14 +56,13 @@ private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
 
     }
 
-  def get(key: String): Option[Array[Byte]] =
-    Option(cache.getIfPresent(key))
-
-  def getOrElse(key: String)(orElse: => Option[Array[Byte]]): Option[Array[Byte]] =
-    get(key) orElse {
-      val v = orElse
-      v.foreach(cache.put(key, _))
-      v
+  def get(key: String, compute: => Option[Array[Byte]]): Option[Array[Byte]] =
+    Option(cache.getIfPresent(key)).map(duplicate) orElse {
+      val r = compute
+      for (v <- r) {
+        cache.put(key, duplicate(v))
+      }
+      r
     }
 
   def remove(key: String)(implicit client: Jedis): Unit = {
@@ -73,6 +73,12 @@ private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
   def invalidate()(implicit client: Jedis): Unit = {
     client.publish(channel, "")
     cache.invalidateAll()
+  }
+
+  private[this] def duplicate(src: Array[Byte]): Array[Byte] = {
+    val dst = new Array[Byte](src.length)
+    System.arraycopy(src, 0, dst, 0, dst.length)
+    dst
   }
 
   invalidator.start()

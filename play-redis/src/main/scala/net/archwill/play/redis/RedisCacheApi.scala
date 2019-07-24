@@ -6,7 +6,7 @@ import scala.util.control.NonFatal
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.zip.{Deflater, Inflater}
+import java.util.zip.{Deflater, DeflaterOutputStream, Inflater, InflaterOutputStream}
 import javax.inject.{Inject, Singleton}
 
 import akka.actor.ActorSystem
@@ -29,17 +29,17 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
 
   private[this] val compressThreshold: Int = 1200
 
-  private[this] val serder: Serialization = SerializationExtension(system)
+  private[this] val serde: Serialization = SerializationExtension(system)
 
   private[this] val client: ManagedResource[Jedis] = managed(pool.getResource)
 
   override def get[T: ClassTag](key: String): Option[T] =
     try {
-      local.getOrElse(key)(doGet(key))
+      local.get(key, doGet(key))
         .map(decode(_).asInstanceOf[T])
     } catch {
       case NonFatal(e) =>
-        logger.warn(s"Could not get key [$key] from cache", e)
+        logger.warn(s"Could not get key from cache: $key", e)
         None
     }
 
@@ -102,7 +102,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
     case prim if prim.getClass.isPrimitive || Primitives.primitives.contains(prim.getClass) =>
       encodeString(prim.toString)
     case obj: AnyRef =>
-      serder.serialize(obj).get
+      serde.serialize(obj).get
     case _ =>
       throw new IllegalArgumentException("Cannot serialize value of type " + value.getClass)
   }
@@ -127,44 +127,41 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
     case Java.Double | Scala.Double =>
       decodeString(data).toDouble
     case Scala.Nothing =>
-      throw new IllegalArgumentException("Cannot decode an instance of Nothing from cache")
+      throw new IllegalArgumentException("Cannot deserialize an instance of Nothing")
     case _ =>
-      serder.deserialize(data, tag.runtimeClass.asInstanceOf[Class[_ <: AnyRef]]).get
+      serde.deserialize(data, tag.runtimeClass.asInstanceOf[Class[_ <: AnyRef]]).get
   }
 
   private[this] def compress(data: Array[Byte]): Array[Byte] = {
-    val out = new ByteArrayOutputStream(data.length + 1)
     if (data.length > compressThreshold) {
+      val out = new ByteArrayOutputStream()
       out.write(deflateMarker.toInt)
-      val deflater = new Deflater(Deflater.BEST_COMPRESSION, true)
-      deflater.setInput(data)
-      deflater.finish()
-      val buffer = Array.ofDim[Byte](1024)
-      while (!deflater.finished) {
-        val len = deflater.deflate(buffer)
-        out.write(buffer, 0, len)
-      }
+      val zip = new DeflaterOutputStream(out, new Deflater(Deflater.BEST_COMPRESSION, true))
+      zip.write(data)
+      zip.finish()
+      zip.flush()
+      out.toByteArray
     } else {
-      out.write(rawMarker.toInt)
-      out.write(data)
+      val res = new Array[Byte](data.length + 1)
+      res(0) = rawMarker
+      System.arraycopy(data, 0, res, 1, data.length)
+      res
     }
-    out.toByteArray
   }
 
   private[this] def decompress(data: Array[Byte]): Array[Byte] = {
-    val out = new ByteArrayOutputStream(data.length - 1)
     if (data.length > 1 && data(0) == deflateMarker) {
-      val inflater = new Inflater(true)
-      inflater.setInput(data, 1, data.length - 1)
-      val buffer = Array.ofDim[Byte](1024)
-      while (!inflater.finished) {
-        val len = inflater.inflate(buffer)
-        out.write(buffer, 0, len)
-      }
+      val out = new ByteArrayOutputStream(data.length)
+      val zip = new InflaterOutputStream(out, new Inflater(true))
+      zip.write(data, 1, data.length - 1)
+      zip.finish()
+      zip.flush()
+      out.toByteArray
     } else {
-      out.write(data, 1, data.length - 1)
+      val res = new Array[Byte](data.length - 1)
+      System.arraycopy(data, 1, res, 0, res.length)
+      res
     }
-    out.toByteArray
   }
 
 }
