@@ -1,5 +1,3 @@
-import ReleaseTransformations._
-
 val scala211 = "2.11.11"
 val scala212 = "2.12.8"
 
@@ -19,6 +17,8 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
     "org.apache.commons" % "commons-pool2" % "2.4.3",
     "redis.clients" % "jedis" % "3.1.0"
   ),
+
+  releaseCrossBuild := true,
 )
 
 lazy val root = (project in file("."))
@@ -29,19 +29,6 @@ lazy val root = (project in file("."))
     publishArtifact := false,
     skip in publish := true,
     publish := {},
-
-    releaseProcess := Seq[ReleaseStep](
-      inquireVersions,
-      runClean,
-      releaseStepCommand("+test"),
-      setReleaseVersion,
-      commitReleaseVersion,
-      tagRelease,
-      releaseStepCommand("+publish"),
-      setNextVersion,
-      commitNextVersion,
-      pushChanges,
-    )
   )
   .aggregate(play24, play25, play26, play27)
 
