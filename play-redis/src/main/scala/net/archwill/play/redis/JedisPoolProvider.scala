@@ -3,7 +3,7 @@ package net.archwill.play.redis
 import javax.inject.{Inject, Provider, Singleton}
 
 import play.api.Logger
-import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import redis.clients.jedis.JedisPool
 import resource._
 
 @Singleton
@@ -14,7 +14,7 @@ private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends P
   override lazy val get: JedisPool = {
     logger.info(s"Connecting to redis at ${config.host}:${config.port}?database=${config.database}")
     val pool = new JedisPool(
-      new JedisPoolConfig,
+      config.poolConfig,
       config.host,
       config.port,
       config.timeout.toMillis.toInt,

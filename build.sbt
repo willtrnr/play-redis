@@ -15,8 +15,9 @@ val commonSettings: Seq[Def.Setting[_]] = Seq(
 
   libraryDependencies ++= Seq(
     "javax.inject" % "javax.inject" % "1",
-    "redis.clients" % "jedis" % "3.0.1",
+    "com.google.guava" % "guava" % "28.0-jre",
     "org.apache.commons" % "commons-pool2" % "2.4.3",
+    "redis.clients" % "jedis" % "3.1.0"
   ),
 )
 
@@ -30,7 +31,6 @@ lazy val root = (project in file("."))
     publish := {},
 
     releaseProcess := Seq[ReleaseStep](
-      checkSnapshotDependencies,
       inquireVersions,
       runClean,
       releaseStepCommand("+test"),

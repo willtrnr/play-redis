@@ -13,12 +13,14 @@ import play.cache.{SyncCacheApi => JSyncCacheApi}
 @Singleton
 class JavaRedisCacheApi @Inject() (cache: RedisCacheApi, env: Environment) extends JSyncCacheApi {
 
+  private[this] val tagPrefix: String = "ct::"
+
   override def get[T](key: String): T =
     getOptional(key).orElse(null.asInstanceOf[T])
 
   // NOTE: Introduced in Play 2.7.x, because of the shared source we can't use `override`
   def getOptional[T](key: String): JOptional[T] =
-    cache.get[String]("ct::" + key)
+    cache.get[String](tagPrefix + key)
       .flatMap { cls => cache.get[T](key)(ClassTag(env.classLoader.loadClass(cls))) }
       .fold(JOptional.empty[T])(JOptional.ofNullable)
 
@@ -41,12 +43,12 @@ class JavaRedisCacheApi @Inject() (cache: RedisCacheApi, env: Environment) exten
     } else {
       val exp = if (expiration <= 0) Duration.Inf else expiration.seconds
       cache.set(key, value, exp)
-      cache.set("ct::" + key, value.getClass.getCanonicalName, exp)
+      cache.set(tagPrefix + key, value.getClass.getCanonicalName, exp)
     }
   }
 
   override def remove(key: String): Unit = {
-    cache.remove("ct::" + key)
+    cache.remove(tagPrefix + key)
     cache.remove(key)
   }
 

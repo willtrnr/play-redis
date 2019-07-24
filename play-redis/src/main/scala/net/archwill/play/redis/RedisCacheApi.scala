@@ -4,7 +4,9 @@ import scala.concurrent.duration.Duration
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
-import java.util.Base64
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets.UTF_8
+import java.util.zip.{Deflater, Inflater}
 import javax.inject.{Inject, Singleton}
 
 import akka.actor.ActorSystem
@@ -15,11 +17,17 @@ import redis.clients.jedis.{Jedis, JedisPool}
 import resource._
 
 @Singleton
-class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends SyncCacheApi {
+class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: ActorSystem) extends SyncCacheApi {
 
-  import scala.reflect.{ClassTag => Scala}, net.archwill.play.redis.{JavaClassTag => Java}
+  import scala.reflect.{ClassTag => Scala}
+  import net.archwill.play.redis.{JavaClassTag => Java}
 
   private[this] val logger: Logger = Logger(classOf[RedisCacheApi])
+
+  private[this] val rawMarker: Byte = 0x00
+  private[this] val deflateMarker: Byte = 0x01
+
+  private[this] val compressThreshold: Int = 1200
 
   private[this] val serder: Serialization = SerializationExtension(system)
 
@@ -27,12 +35,17 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
 
   override def get[T: ClassTag](key: String): Option[T] =
     try {
-      Option(client.acquireAndGet(_.get(key))).map(decode(_).asInstanceOf[T])
+      local.getOrElse(key)(doGet(key))
+        .map(decode(_).asInstanceOf[T])
     } catch {
       case NonFatal(e) =>
         logger.warn(s"Could not get key [$key] from cache", e)
         None
     }
+
+  private[this] def doGet(key: String): Option[Array[Byte]] =
+    client.acquireAndGet(c => Option(c.get(encodeString(key))))
+      .map(decompress)
 
   override def getOrElseUpdate[A: ClassTag](key: String, expiration: Duration)(orElse: => A): A =
     get[A](key) getOrElse {
@@ -46,71 +59,112 @@ class RedisCacheApi @Inject() (pool: JedisPool, system: ActorSystem) extends Syn
       if (value == null) {
         remove(key)
       } else {
-        val encoded = encode(value)
-        client acquireAndGet { c =>
-          if (expiration.isFinite) {
-            c.setex(key, expiration.toSeconds.toInt, encoded)
-          } else {
-            c.set(key, encoded)
-          }
-          ()
-        }
+        doSet(key, encode(value), expiration)
       }
     } catch {
       case NonFatal(e) =>
         logger.warn(s"Could not set key [$key] in cache", e)
     }
 
+  def doSet(key: String, value: Array[Byte], exp: Duration): Unit =
+    client acquireAndGet { implicit c =>
+      if (exp.isFinite) {
+        c.setex(encodeString(key), exp.toSeconds.toInt, compress(value))
+      } else {
+        c.set(encodeString(key), compress(value))
+      }
+      local.remove(key)
+    }
+
   override def remove(key: String): Unit =
-    client acquireAndGet { c =>
+    client acquireAndGet { implicit c =>
       c.del(key)
-      ()
+      local.remove(key)
     }
 
   def invalidate(): Unit =
-    client acquireAndGet { c =>
+    client acquireAndGet { implicit c =>
       c.flushDB()
-      ()
+      local.invalidate()
     }
 
-  private[this] def encode(value: Any): String = value match {
+  private[this] def encodeString(value: String): Array[Byte] =
+    value.getBytes(UTF_8)
+
+  private[this] def decodeString(data: Array[Byte]): String =
+    new String(data, UTF_8)
+
+  private[this] def encode(value: Any): Array[Byte] = value match {
     case null =>
       throw new IllegalArgumentException("Cannot serialize null")
     case str: String =>
-      str
+      encodeString(str)
     case prim if prim.getClass.isPrimitive || Primitives.primitives.contains(prim.getClass) =>
-      prim.toString
+      encodeString(prim.toString)
     case obj: AnyRef =>
-      val data = serder.findSerializerFor(obj).toBinary(obj)
-      Base64.getEncoder().encodeToString(data)
+      serder.serialize(obj).get
     case _ =>
       throw new IllegalArgumentException("Cannot serialize value of type " + value.getClass)
   }
 
-  private[this] def decode[T](value: String)(implicit tag: ClassTag[T]): Any = tag match {
+  private[this] def decode[T](data: Array[Byte])(implicit tag: ClassTag[T]): Any = tag match {
     case Java.String =>
-      value
+      decodeString(data)
     case Java.Boolean | Scala.Boolean =>
-      value.toBoolean
+      decodeString(data).toBoolean
     case Java.Byte | Scala.Byte =>
-      value.toByte
+      decodeString(data).toByte
     case Java.Char | Scala.Char =>
-      value.charAt(0)
+      decodeString(data).charAt(0)
     case Java.Short | Scala.Short =>
-      value.toShort
+      decodeString(data).toShort
     case Java.Int | Scala.Int =>
-      value.toInt
+      decodeString(data).toInt
     case Java.Long | Scala.Long =>
-      value.toLong
+      decodeString(data).toLong
     case Java.Float | Scala.Float =>
-      value.toFloat
+      decodeString(data).toFloat
     case Java.Double | Scala.Double =>
-      value.toDouble
+      decodeString(data).toDouble
     case Scala.Nothing =>
       throw new IllegalArgumentException("Cannot decode an instance of Nothing from cache")
     case _ =>
-      val data = Base64.getDecoder.decode(value)
       serder.deserialize(data, tag.runtimeClass.asInstanceOf[Class[_ <: AnyRef]]).get
+  }
+
+  private[this] def compress(data: Array[Byte]): Array[Byte] = {
+    val out = new ByteArrayOutputStream(data.length + 1)
+    if (data.length > compressThreshold) {
+      out.write(deflateMarker.toInt)
+      val deflater = new Deflater(Deflater.BEST_COMPRESSION, true)
+      deflater.setInput(data)
+      deflater.finish()
+      val buffer = Array.ofDim[Byte](1024)
+      while (!deflater.finished) {
+        val len = deflater.deflate(buffer)
+        out.write(buffer, 0, len)
+      }
+    } else {
+      out.write(rawMarker.toInt)
+      out.write(data)
+    }
+    out.toByteArray
+  }
+
+  private[this] def decompress(data: Array[Byte]): Array[Byte] = {
+    val out = new ByteArrayOutputStream(data.length - 1)
+    if (data.length > 1 && data(0) == deflateMarker) {
+      val inflater = new Inflater(true)
+      inflater.setInput(data, 1, data.length - 1)
+      val buffer = Array.ofDim[Byte](1024)
+      while (!inflater.finished) {
+        val len = inflater.inflate(buffer)
+        out.write(buffer, 0, len)
+      }
+    } else {
+      out.write(data, 1, data.length - 1)
+    }
+    out.toByteArray
   }
 
 }

@@ -7,6 +7,13 @@ Built over the Jedis connector and Akka serialization for maximum flexibility.
 One of the main goal is to provide a consistent implementation over multiple
 Play framework versions to allow interoperability.
 
+Features
+--------
+
+ - Akka serialization for pluggable serialization protocols.
+ - Compression of larger values to reduce bandwidth.
+ - 2-tier cache system, recent keys are kept in a local cache.
+
 Usage
 -----
 
@@ -15,7 +22,7 @@ Add to your build:
 ```scala
 resolvers += "Archwill Releases" at Resolver.bintrayRepo("wiill", "maven")
 
-libraryDependencies += "net.archwill.play" %% "play-redis" % "1.0.0.play26"
+libraryDependencies += "net.archwill.play" %% "play-redis" % "1.0.1.play26"
 ```
 
 Use the version matching your Play's major and minor release. Currently Play
@@ -43,6 +50,17 @@ redis {
 
   # For Play 2.6+ only, the Akka dispatcher to use for the async cache interface
   dispatcher = akka.actor.default-dispatcher
+
+  pool {
+    min-idle = 2
+    max-idle = 8
+    max-total = 8
+  }
+
+  local-cache {
+    max-size = 1000
+    expiration = null
+  }
 }
 ```
 

@@ -8,7 +8,7 @@ import play.api.cache.SyncCacheApi
 import play.api.inject.{Binding, Module}
 import play.api.{Configuration, Environment}
 import play.cache.{SyncCacheApi => JSyncCacheApi}
-import redis.clients.jedis.{JedisPool}
+import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
 case class RedisConfig(
   host: String,
@@ -16,13 +16,21 @@ case class RedisConfig(
   timeout: Duration,
   password: Option[String],
   database: Int,
-  dispatcher: String
+  dispatcher: String,
+  poolConfig: JedisPoolConfig,
+  localCache: RedisLocalCacheConfig
+)
+
+case class RedisLocalCacheConfig(
+  maxSize: Int,
+  expiration: Option[Duration]
 )
 
 class RedisModule extends Module {
 
   override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] = Seq(
     bind[RedisConfig].to(new RedisConfigProvider(configuration.underlying.getConfig("redis"))),
+    bind[RedisLocalCache].toSelf,
     bind[JedisPool].toProvider[JedisPoolProvider],
     bind[SyncCacheApi].to[RedisCacheApi],
     bind[JSyncCacheApi].to[JavaRedisCacheApi]
@@ -36,9 +44,30 @@ private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisC
     host = config.getString("host"),
     port = config.getInt("port"),
     timeout = config.getDuration("timeout"),
-    password = if (!config.getIsNull("password")) Some(config.getString("password")) else None,
+    password = {
+      if (!config.getIsNull("password"))
+        Some(config.getString("password"))
+      else
+        None
+    },
     database = config.getInt("database"),
-    dispatcher = config.getString("dispatcher")
+    dispatcher = config.getString("dispatcher"),
+    poolConfig = {
+      val c = new JedisPoolConfig
+      c.setMinIdle(config.getInt("pool.min-idle"))
+      c.setMaxIdle(config.getInt("pool.max-idle"))
+      c.setMaxTotal(config.getInt("pool.max-total"))
+      c
+    },
+    localCache = RedisLocalCacheConfig(
+      maxSize = config.getInt("local-cache.max-size"),
+      expiration = {
+        if (!config.getIsNull("local-cache.expiration"))
+          Some(config.getDuration("local-cache.expiration"))
+        else
+          None
+      }
+    )
   )
 
 }
