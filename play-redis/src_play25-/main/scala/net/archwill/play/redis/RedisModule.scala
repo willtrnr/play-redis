@@ -17,6 +17,7 @@ case class RedisConfig(
   password: Option[String],
   database: Int,
   poolConfig: JedisPoolConfig,
+  compressThreshold: Int,
   localCache: RedisLocalCacheConfig
 )
 
@@ -52,6 +53,7 @@ private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisC
       c.setMaxTotal(config.getInt("pool.max-total"))
       c
     },
+    compressThreshold = config.getBytes("compress-threshold").toInt,
     localCache = RedisLocalCacheConfig(
       maxSize = config.getInt("local-cache.max-size"),
       expiration = {

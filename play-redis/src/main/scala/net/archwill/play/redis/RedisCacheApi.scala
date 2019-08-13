@@ -17,7 +17,7 @@ import redis.clients.jedis.{Jedis, JedisPool}
 import resource._
 
 @Singleton
-class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: ActorSystem) extends SyncCacheApi {
+class RedisCacheApi @Inject() (config: RedisConfig, pool: JedisPool, local: RedisLocalCache)(implicit system: ActorSystem) extends SyncCacheApi {
 
   import scala.reflect.{ClassTag => Scala}
   import net.archwill.play.redis.{JavaClassTag => Java}
@@ -26,8 +26,6 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
 
   private[this] val rawMarker: Byte = 0x00
   private[this] val deflateMarker: Byte = 0x01
-
-  private[this] val compressThreshold: Int = 1200
 
   private[this] val serde: Serialization = SerializationExtension(system)
 
@@ -137,7 +135,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
   }
 
   private[this] def compress(data: Array[Byte]): Array[Byte] = {
-    if (data.length > compressThreshold) {
+    if (data.length > config.compressThreshold) {
       val out = new ByteArrayOutputStream()
       out.write(deflateMarker.toInt)
       val zip = new DeflaterOutputStream(out, new Deflater(Deflater.BEST_COMPRESSION, true))

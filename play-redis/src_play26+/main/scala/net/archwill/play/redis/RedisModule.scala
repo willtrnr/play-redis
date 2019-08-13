@@ -16,8 +16,9 @@ case class RedisConfig(
   timeout: Duration,
   password: Option[String],
   database: Int,
-  dispatcher: String,
   poolConfig: JedisPoolConfig,
+  compressThreshold: Int,
+  dispatcher: String,
   localCache: RedisLocalCacheConfig
 )
 
@@ -51,7 +52,6 @@ private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisC
         None
     },
     database = config.getInt("database"),
-    dispatcher = config.getString("dispatcher"),
     poolConfig = {
       val c = new JedisPoolConfig
       c.setMinIdle(config.getInt("pool.min-idle"))
@@ -59,6 +59,8 @@ private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisC
       c.setMaxTotal(config.getInt("pool.max-total"))
       c
     },
+    compressThreshold = config.getBytes("compress-threshold").toInt,
+    dispatcher = config.getString("dispatcher"),
     localCache = RedisLocalCacheConfig(
       maxSize = config.getInt("local-cache.max-size"),
       expiration = {
