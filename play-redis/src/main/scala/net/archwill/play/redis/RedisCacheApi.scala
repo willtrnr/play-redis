@@ -66,7 +66,7 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
         logger.warn(s"Could not set key [$key] in cache", e)
     }
 
-  def doSet(key: String, value: Array[Byte], exp: Duration): Unit =
+  private[this] def doSet(key: String, value: Array[Byte], exp: Duration): Unit =
     client acquireAndGet { implicit c =>
       if (exp.isFinite) {
         c.setex(encodeString(key), exp.toSeconds.toInt, compress(value))
@@ -91,9 +91,6 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
   private[this] def encodeString(value: String): Array[Byte] =
     value.getBytes(UTF_8)
 
-  private[this] def decodeString(data: Array[Byte]): String =
-    new String(data, UTF_8)
-
   private[this] def encode(value: Any): Array[Byte] = value match {
     case null =>
       throw new IllegalArgumentException("Cannot serialize null")
@@ -101,11 +98,16 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
       encodeString(str)
     case prim if prim.getClass.isPrimitive || Primitives.primitives.contains(prim.getClass) =>
       encodeString(prim.toString)
+    case arr: Array[Byte] =>
+      arr
     case obj: AnyRef =>
       serde.serialize(obj).get
     case _ =>
       throw new IllegalArgumentException("Cannot serialize value of type " + value.getClass)
   }
+
+  private[this] def decodeString(data: Array[Byte]): String =
+    new String(data, UTF_8)
 
   private[this] def decode[T](data: Array[Byte])(implicit tag: ClassTag[T]): Any = tag match {
     case Java.String =>
@@ -128,6 +130,8 @@ class RedisCacheApi @Inject() (pool: JedisPool, local: RedisLocalCache, system: 
       decodeString(data).toDouble
     case Scala.Nothing =>
       throw new IllegalArgumentException("Cannot deserialize an instance of Nothing")
+    case Java.ByteArray =>
+      data
     case _ =>
       serde.deserialize(data, tag.runtimeClass.asInstanceOf[Class[_ <: AnyRef]]).get
   }
@@ -192,5 +196,7 @@ private[redis] object JavaClassTag {
   val Float = ClassTag(classOf[java.lang.Float])
   val Double = ClassTag(classOf[java.lang.Double])
   val String = ClassTag(classOf[java.lang.String])
+
+  val ByteArray: ClassTag[Array[Byte]] = ClassTag(classOf[Array[Byte]])
 
 }
