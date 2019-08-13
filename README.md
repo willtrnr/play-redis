@@ -61,8 +61,7 @@ for how to set this up.
 
 This plugin also makes use of a local cache to speed up lookups for recent keys.
 When retrofitting caching in a legacy system making inneficient use of database
-requests with duplicated queries per request this can greatly help with response
-time.
+requests with duplicated queries this can greatly help the response time.
 
 A Redis Pub-Sub channel is used to communicate the invalidations, which may
 introduce a slight delay between when a key is changed and when every
@@ -70,7 +69,7 @@ application instance is aware of it. Depending on how your application makes use
 of the cache this may be a source of issues.
 
 If needed, disabled it by setting the `redis.local-cache.max-size` configuration
-key to 0. You may also want to tweak that value dependeing on the number of
+key to 0. You may also want to tweak that value depending on the number of
 unique keys used and the heap memory available.
 
 Some scenarios where it could be desirable to disable the local cache include:
