@@ -11,7 +11,7 @@ import akka.actor.ActorSystem
 import play.api.cache.AsyncCacheApi
 
 @Singleton
-class RedisAsyncCacheApi @Inject() (cache: RedisCacheApi, config: RedisConfig, system: ActorSystem) extends AsyncCacheApi {
+class RedisAsyncCacheApi @Inject() (cache: RedisCacheApi, config: AsyncRedisConfig, system: ActorSystem) extends AsyncCacheApi {
 
   implicit private[this] val dispatcher: ExecutionContext =
     system.dispatchers.lookup(config.dispatcher)

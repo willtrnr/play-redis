@@ -1,75 +1,32 @@
 package net.archwill.play.redis
 
-import java.time.Duration
 import javax.inject.Provider
 
 import com.typesafe.config.Config
-import play.api.cache.SyncCacheApi
-import play.api.inject.{Binding, Module}
+import play.api.cache.{AsyncCacheApi, SyncCacheApi}
+import play.api.inject.Binding
 import play.api.{Configuration, Environment}
 import play.cache.{SyncCacheApi => JSyncCacheApi}
-import redis.clients.jedis.{JedisPool, JedisPoolConfig}
 
-case class RedisConfig(
-  host: String,
-  port: Int,
-  timeout: Duration,
-  password: Option[String],
-  database: Int,
-  poolConfig: JedisPoolConfig,
-  compressThreshold: Int,
-  dispatcher: String,
-  localCache: RedisLocalCacheConfig
+case class AsyncRedisConfig(
+  dispatcher: String
 )
 
-case class RedisLocalCacheConfig(
-  maxSize: Int,
-  expiration: Option[Duration]
-)
+class RedisModule extends BaseRedisModule {
 
-class RedisModule extends Module {
-
-  override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] = Seq(
-    bind[RedisConfig].to(new RedisConfigProvider(configuration.underlying.getConfig("redis"))),
-    bind[RedisLocalCache].toSelf,
-    bind[JedisPool].toProvider[JedisPoolProvider],
-    bind[SyncCacheApi].to[RedisCacheApi],
-    bind[JSyncCacheApi].to[JavaRedisCacheApi]
-  )
+  override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] =
+    super.bindings(environment, configuration) ++ Seq(
+      bind[SyncCacheApi].to[RedisCacheApi],
+      bind[JSyncCacheApi].to[JavaRedisCacheApi],
+      bind[AsyncCacheApi].to[RedisAsyncCacheApi]
+    )
 
 }
 
-private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisConfig] {
+class AsyncRedisConfigProvider(config: Config) extends Provider[AsyncRedisConfig] {
 
-  override lazy val get: RedisConfig = RedisConfig(
-    host = config.getString("host"),
-    port = config.getInt("port"),
-    timeout = config.getDuration("timeout"),
-    password = {
-      if (!config.getIsNull("password"))
-        Some(config.getString("password"))
-      else
-        None
-    },
-    database = config.getInt("database"),
-    poolConfig = {
-      val c = new JedisPoolConfig
-      c.setMinIdle(config.getInt("pool.min-idle"))
-      c.setMaxIdle(config.getInt("pool.max-idle"))
-      c.setMaxTotal(config.getInt("pool.max-total"))
-      c
-    },
-    compressThreshold = config.getBytes("compress-threshold").toInt,
-    dispatcher = config.getString("dispatcher"),
-    localCache = RedisLocalCacheConfig(
-      maxSize = config.getInt("local-cache.max-size"),
-      expiration = {
-        if (!config.getIsNull("local-cache.expiration"))
-          Some(config.getDuration("local-cache.expiration"))
-        else
-          None
-      }
-    )
+  override lazy val get: AsyncRedisConfig = AsyncRedisConfig(
+    dispatcher = config.getString("dispatcher")
   )
 
 }
