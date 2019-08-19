@@ -106,8 +106,8 @@ lazy val play26 = (project in file("./play-redis"))
     ),
 
     unmanagedSourceDirectories in Compile ++= Seq(
-      baseDirectory.value / "src_play26+" / "main" / "java",
-      baseDirectory.value / "src_play26+" / "main" / "scala",
+      baseDirectory.value / "src_play26_play27" / "main" / "java",
+      baseDirectory.value / "src_play26_play27" / "main" / "scala",
     ),
 
     target := baseDirectory.value / "target" / "play26",
@@ -129,11 +129,34 @@ lazy val play27 = (project in file("./play-redis"))
     ),
 
     unmanagedSourceDirectories in Compile ++= Seq(
-      baseDirectory.value / "src_play26+" / "main" / "java",
-      baseDirectory.value / "src_play26+" / "main" / "scala",
+      baseDirectory.value / "src_play26_play27" / "main" / "java",
+      baseDirectory.value / "src_play26_play27" / "main" / "scala",
     ),
 
     target := baseDirectory.value / "target" / "play27",
+  )
+
+lazy val play28 = (project in file("./play-redis"))
+  .settings(commonSettings)
+  .settings(
+    version := addVerSuffix(version.value, "play28"),
+
+    scalaVersion := scala212,
+
+    libraryDependencies ++= Seq(
+      "com.typesafe" % "config" % "1.3.4",
+      "com.typesafe.play" %% "play" % "2.8.0-M4" % "provided",
+      "com.typesafe.play" %% "play-cache" % "2.8.0-M4" % "provided",
+      "com.typesafe.akka" %% "akka-actor" % "2.6.0-M5" % "provided",
+      "com.jsuereth" %% "scala-arm" % "2.0",
+    ),
+
+    unmanagedSourceDirectories in Compile ++= Seq(
+      baseDirectory.value / "src_play28+" / "main" / "java",
+      baseDirectory.value / "src_play28+" / "main" / "scala",
+    ),
+
+    target := baseDirectory.value / "target" / "play28",
   )
 
 def addVerSuffix(version: String, suffix: String): String = version.split('-') match {
