@@ -26,9 +26,8 @@ libraryDependencies += "net.archwill.play" %% "play-redis" % "1.0.3.play26"
 ```
 
 Check for the latest version in the download badge above, also use the version
-suffix matching your Play's major and minor release. Currently only Play 2.4.x
-and 2.5.x are fully supported, the implementation for version 2.6.x and 2.7.x
-are incomplete at the moment.
+suffix matching your Play's major and minor release. Play version 2.4.x to 2.7.x
+are fully supported.
 
 Then enable the module in your configuration, while disabling Ehcache:
 
