@@ -20,7 +20,14 @@ class RedisAsyncCacheApi @Inject() (cache: RedisCacheApi, config: AsyncRedisConf
     Future(blocking { cache.get(key) })
 
   override def getOrElseUpdate[A: ClassTag](key: String, expiration: Duration)(orElse: => Future[A]): Future[A] =
-    get(key).flatMap(_.fold(orElse)(Future.successful))
+    get(key) flatMap {
+      case Some(o) =>
+        Future.successful(o)
+      case None =>
+        val f = orElse
+        f.foreach(cache.set(key, _, expiration))
+        f
+    }
 
   override def set(key: String, value: Any, expiration: Duration): Future[Done] =
     Future(blocking {

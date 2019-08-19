@@ -6,7 +6,7 @@ import com.typesafe.config.Config
 import play.api.cache.{AsyncCacheApi, SyncCacheApi}
 import play.api.inject.Binding
 import play.api.{Configuration, Environment}
-import play.cache.{SyncCacheApi => JSyncCacheApi}
+import play.cache.{AsyncCacheApi => JAsyncCacheApi, SyncCacheApi => JSyncCacheApi}
 
 case class AsyncRedisConfig(
   dispatcher: String
@@ -18,7 +18,8 @@ class RedisModule extends BaseRedisModule {
     super.bindings(environment, configuration) ++ Seq(
       bind[SyncCacheApi].to[RedisCacheApi],
       bind[JSyncCacheApi].to[JavaRedisCacheApi],
-      bind[AsyncCacheApi].to[RedisAsyncCacheApi]
+      bind[AsyncCacheApi].to[RedisAsyncCacheApi],
+      bind[JAsyncCacheApi].to[JavaRedisAsyncCacheApi]
     )
 
 }
