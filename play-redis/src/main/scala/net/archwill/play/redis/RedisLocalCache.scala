@@ -1,5 +1,6 @@
 package net.archwill.play.redis
 
+import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import java.util.concurrent.TimeUnit
@@ -8,15 +9,18 @@ import javax.inject.{Inject, Singleton}
 
 import com.google.common.cache.{Cache, CacheBuilder}
 import play.api.Logger
+import play.api.inject.ApplicationLifecycle
 import redis.clients.jedis.{Jedis, JedisPubSub}
 import resource._
 
 @Singleton
-private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
+private[redis] class RedisLocalCache @Inject() (config: RedisConfig, lifecycle: ApplicationLifecycle) {
 
   import RedisLocalCache._
 
   private[this] val logger: Logger = Logger(classOf[RedisLocalCache])
+
+  private[this] val channel: String = "::_cache_inv"
 
   private[this] val localCache: Cache[String, Array[Byte]] = {
     val b = CacheBuilder.newBuilder().maximumSize(config.localCache.maxSize.toLong)
@@ -24,35 +28,51 @@ private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
     b.build()
   }
 
-  private[this] val invalidationHandler: JedisPubSub = new JedisPubSub() {
-
-    override def onMessage(channel: String, message: String): Unit = message match {
-      case "" =>
-        logger.info("Invalidating all keys in local cache")
-        localCache.invalidateAll()
-      case _ =>
-        logger.trace(s"Invalidating key: $message")
-        localCache.invalidate(message)
-    }
-
-  }
-
-
+  // FIXME: This thing is very messy, but the blocking Jedis PubSub handling there's very few we can do
   private[this] val invalidator: Thread =
-    new Thread("redis-local-cache-invalidator-" + invThreadId.incrementAndGet) {
+    new Thread("redis-local-cache-invalidator-" + threadId.incrementAndGet) {
+
+      @volatile private[this] var current: Jedis = _
+
+      private[this] val handler: JedisPubSub = new JedisPubSub() {
+        override def onMessage(channel: String, message: String): Unit = message match {
+          case "" =>
+            logger.info("Invalidating all keys in local cache")
+            localCache.invalidateAll()
+          case _ =>
+            logger.trace(s"Invalidating key: $message")
+            localCache.invalidate(message)
+        }
+      }
 
       override def run(): Unit = while (!isInterrupted) {
         logger.info(s"Connecting local cache invalidator to Redis at ${config.host}:${config.port}")
         try {
-          managed(new Jedis(config.host, config.port, config.timeout.toMillis.toInt)).acquireAndGet { client =>
+          managed(new Jedis(config.host, config.port, config.timeout.toMillis.toInt)) acquireAndGet { client =>
             config.password.foreach(client.auth)
-            client.subscribe(invalidationHandler, channel)
+            current = client
+            client.subscribe(handler, channel)
           }
         } catch {
+          case _: InterruptedException =>
+            interrupt()
           case NonFatal(e) =>
-            logger.warn("Local cache invalidator was disconnected from PubSub channel, waiting 2s before reconnecting...", e)
-            Thread.sleep(2000)
+            if (!isInterrupted) {
+              logger.warn("Local cache invalidator was disconnected from PubSub channel, waiting 2s before reconnecting...", e)
+              Thread.sleep(2000)
+            }
+        } finally {
+          current = null
         }
+      }
+
+      override def start(): Unit = {
+        lifecycle.addStopHook { () =>
+          interrupt()
+          if (current ne null) current.close()
+          Future.successful(())
+        }
+        super.start()
       }
 
     }
@@ -76,20 +96,18 @@ private[redis] class RedisLocalCache @Inject() (config: RedisConfig) {
     localCache.invalidateAll()
   }
 
+  private[this] def duplicate(src: Array[Byte]): Array[Byte] = {
+    val dst = new Array[Byte](src.length)
+    System.arraycopy(src, 0, dst, 0, dst.length)
+    dst
+  }
+
   invalidator.start()
 
 }
 
 private[redis] object RedisLocalCache {
 
-  val channel: String = "::_cache_inv"
-
-  val invThreadId: AtomicInteger = new AtomicInteger(0)
-
-  def duplicate(src: Array[Byte]): Array[Byte] = {
-    val dst = new Array[Byte](src.length)
-    System.arraycopy(src, 0, dst, 0, dst.length)
-    dst
-  }
+  val threadId: AtomicInteger = new AtomicInteger(0)
 
 }

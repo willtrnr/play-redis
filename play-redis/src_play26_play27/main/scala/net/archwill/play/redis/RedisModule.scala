@@ -16,6 +16,7 @@ class RedisModule extends BaseRedisModule {
 
   override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] =
     super.bindings(environment, configuration) ++ Seq(
+      bind[AsyncRedisConfig].to(new AsyncRedisConfigProvider(configuration.underlying.getConfig("redis"))),
       bind[SyncCacheApi].to[RedisCacheApi],
       bind[JSyncCacheApi].to[JavaRedisCacheApi],
       bind[AsyncCacheApi].to[RedisAsyncCacheApi],
@@ -24,7 +25,7 @@ class RedisModule extends BaseRedisModule {
 
 }
 
-class AsyncRedisConfigProvider(config: Config) extends Provider[AsyncRedisConfig] {
+private[redis] class AsyncRedisConfigProvider(config: Config) extends Provider[AsyncRedisConfig] {
 
   override lazy val get: AsyncRedisConfig = AsyncRedisConfig(
     dispatcher = config.getString("dispatcher")

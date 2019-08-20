@@ -52,7 +52,7 @@ Check out the other possible knobs and defaults in
 ### Serialization
 
 Objects will be serialized using Akka Serialization making it possible to use
-Kryo or other saner serialization frameworks than Java serialization. Read the
+Kryo or any other saner alternative than Java serialization. Read the
 [Akka documentation](https://doc.akka.io/docs/akka/current/serialization.html)
 for how to set this up.
 

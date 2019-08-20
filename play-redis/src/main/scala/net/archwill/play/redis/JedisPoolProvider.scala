@@ -1,13 +1,16 @@
 package net.archwill.play.redis
 
+import scala.concurrent.Future
+
 import javax.inject.{Inject, Provider, Singleton}
 
 import play.api.Logger
+import play.api.inject.ApplicationLifecycle
 import redis.clients.jedis.JedisPool
 import resource._
 
 @Singleton
-private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends Provider[JedisPool] {
+private[redis] class JedisPoolProvider @Inject() (config: RedisConfig, lifecycle: ApplicationLifecycle) extends Provider[JedisPool] {
 
   private[this] val logger = Logger(classOf[JedisPoolProvider])
 
@@ -23,6 +26,7 @@ private[redis] class JedisPoolProvider @Inject() (config: RedisConfig) extends P
     )
     // Make sure our pool can handle requests before signing off on it
     managed(pool.getResource).acquireAndGet(_.ping())
+    lifecycle.addStopHook(() => Future.successful(pool.close()))
     pool
   }
 

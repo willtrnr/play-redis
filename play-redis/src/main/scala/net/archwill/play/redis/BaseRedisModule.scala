@@ -1,6 +1,6 @@
 package net.archwill.play.redis
 
-import javax.inject.{Inject, Provider, Singleton}
+import javax.inject.Provider
 
 import com.typesafe.config.Config
 import play.api.inject.{Binding, Module}
@@ -11,14 +11,13 @@ private[redis] abstract class BaseRedisModule extends Module {
 
   override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] = Seq(
     bind[RedisConfig].to(new RedisConfigProvider(configuration.underlying.getConfig("redis"))),
-    bind[RedisLocalCache].toSelf,
-    bind[JedisPool].toProvider[JedisPoolProvider]
+    bind[JedisPool].toProvider[JedisPoolProvider],
+    bind[RedisLocalCache].toSelf
   )
 
 }
 
-@Singleton
-private[redis] class RedisConfigProvider @Inject() (config: Config) extends Provider[RedisConfig] {
+private[redis] class RedisConfigProvider(config: Config) extends Provider[RedisConfig] {
 
   override lazy val get: RedisConfig = RedisConfig(
     host = config.getString("host"),
