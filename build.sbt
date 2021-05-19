@@ -5,10 +5,22 @@ val scala212 = "2.12.8"
 
 val commonSettings: Seq[Def.Setting[_]] = Seq(
   organization := "net.archwill.play",
+  version := (version in ThisBuild).value,
 
   name := "play-redis",
+  description := "Redis cache for Play Framework",
+
+  homepage := Some(url("https://github.com/willtrnr/play-redis")),
 
   licenses := Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
+
+  scmInfo := Some(ScmInfo(
+    url("https://github.com/willtrnr/play-redis"),
+    "scm:git:https://github.com/willtrnr/play-redis.git",
+    "scm:git:ssh://git@github.com/willtrnr/play-redis.git"
+  )),
+
+  publishTo := Some("GitHub" at "https://maven.pkg.github.com/willtrnr/maven-repo"),
 
   scalaVersion := scala211,
   crossScalaVersions := Seq(scala211),

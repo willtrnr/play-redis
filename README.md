@@ -17,12 +17,13 @@ Features
 Usage
 -----
 
-Add to your build:
+Add this GitHub maven package repository to your build:
+[willtrnr/maven-repo](https://github.com/willtrnr/maven-repo)
+
+Then add the dependency with the correct Play major and minor suffix:
 
 ```scala
-resolvers += "Archwill Releases" at Resolver.bintrayRepo("wiill", "maven")
-
-libraryDependencies += "net.archwill.play" %% "play-redis" % "1.0.3.play26"
+libraryDependencies += "net.archwill.play" %% "play-redis" % "1.0.5.play26"
 ```
 
 Check for the latest version in the download badge above, also use the version
@@ -74,7 +75,7 @@ unique keys used and the heap memory available.
 Some scenarios where it could be desirable to disable the local cache include:
 
  - The keys used are vastly different with each request
- - Your application is very sensitive to data freshness
+ - Your application is sensitive to data freshness
  - Keys are not requested more than once per request
  - Cache keys are changing extremely often
 
