@@ -1,8 +1,6 @@
 Redis Cache Module for Play Framework
 =====================================
 
-[![Download](https://api.bintray.com/packages/wiill/maven/play-redis/images/download.svg)](https://bintray.com/wiill/maven/play-redis/_latestVersion)
-
 Built over the Jedis connector and Akka serialization for maximum flexibility.
 One of the main goal is to provide a consistent implementation over multiple
 Play framework versions to allow interoperability.
